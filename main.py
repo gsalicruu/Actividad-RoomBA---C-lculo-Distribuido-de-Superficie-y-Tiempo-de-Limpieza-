@@ -4,7 +4,8 @@ import concurrent.futures
 from roomba import Roomba
 from pelusa import update_pelusas
 from bullet import Bullet
-from config import WIDTH, HEIGHT, WHITE, RED, GRID_SIZE, NUM_PELUSAS
+from tcp_client import pedir_pelusas, notificar_limpieza
+from config import WIDTH, HEIGHT, WHITE, RED, GRID_SIZE
 
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -19,24 +20,15 @@ def spawn_roomba():
         random.randint(0, HEIGHT // GRID_SIZE - 1) * GRID_SIZE
     )
 
-# Función para generar pelusas aleatorias
-def spawn_pelusas():
-    print("[Task] Creando pelusas...")
-    return [
-        (
-            random.randint(0, WIDTH // GRID_SIZE - 1) * GRID_SIZE,
-            random.randint(0, HEIGHT // GRID_SIZE - 1) * GRID_SIZE
-        ) for _ in range(NUM_PELUSAS)
-    ]
-
 # Función principal
 def main():
     print("[Main] Iniciando tareas...")
     tasks = {}
+    pelusas = []  # ✅ Inicializamos pelusas para evitar errores
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         tasks[executor.submit(spawn_roomba)] = "Spawn de Roomba"
-        tasks[executor.submit(spawn_pelusas)] = "Spawn de Pelusas"
+        tasks[executor.submit(pedir_pelusas)] = "Pelusas desde servidor"
 
         for future in concurrent.futures.as_completed(tasks):
             task_name = tasks[future]
@@ -47,11 +39,19 @@ def main():
             else:
                 if task_name == "Spawn de Roomba":
                     roomba_pos = result
-                elif task_name == "Spawn de Pelusas":
-                    pelusas = result
+                elif task_name == "Pelusas desde servidor":
+                    if result:
+                        pelusas = result
+                    else:
+                        print("[Advertencia] No se recibieron pelusas del servidor.")
+                        pelusas = []
                 print(f"[Main] {task_name} completada.")
 
     print("[Main] Todas las tareas han finalizado.")
+
+    if not pelusas:
+        print("[Error] No se recibieron pelusas. Cerrando el juego.")
+        return
 
     roomba = Roomba(roomba_pos)
     bullets = []
